@@ -2,7 +2,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 
-// Read the Gemini API key from .env.local.
 const apiKey = process.env.GEMINI_API_KEY;
 
 if (!apiKey) {
@@ -13,14 +12,27 @@ if (!apiKey) {
 
 const ai = new GoogleGenAI({ apiKey });
 
-// Validate what the frontend sends us.
+const ResourceSchema = z.object({
+  title: z.string().min(1),
+  url: z.string().url(),
+  type: z.enum(["article", "video", "course", "practice"]),
+});
+
+const SubstepSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  description: z.string().min(1),
+  estimatedMinutes: z.number().int().positive(),
+  completed: z.boolean(),
+  resources: z.array(ResourceSchema),
+});
+
 const RequestSchema = z.object({
   careerGoal: z.string().trim().min(2).max(150),
   skillLevel: z.enum(["Beginner", "Intermediate", "Advanced"]),
   hoursPerWeek: z.number().int().min(1).max(80),
 });
 
-// Validate the roadmap returned by Gemini.
 const RoadmapSchema = z.object({
   nodes: z
     .array(
@@ -28,31 +40,30 @@ const RoadmapSchema = z.object({
         id: z.string().min(1),
         title: z.string().min(1),
         skills: z.array(z.string()).min(1),
-        project: z.string(),
+        project: z.string().min(1),
         estimatedHours: z.number().positive(),
         status: z.enum([
           "not_started",
           "in_progress",
           "completed",
         ]),
+        substeps: z.array(SubstepSchema).min(2).max(6),
+        resources: z.array(ResourceSchema),
       })
     )
     .min(1),
-
   edges: z.array(
     z.object({
       source: z.string(),
       target: z.string(),
     })
   ),
-
   targetRole: z.string(),
   estimatedWeeks: z.number().int().positive(),
 });
 
 export async function POST(request: Request) {
   try {
-    // 1. Read and validate user input.
     const body: unknown = await request.json();
     const inputResult = RequestSchema.safeParse(body);
 
@@ -69,51 +80,61 @@ export async function POST(request: Request) {
     const { careerGoal, skillLevel, hoursPerWeek } =
       inputResult.data;
 
-    // 2. Ask Gemini to generate a roadmap.
     const aiResponse = await ai.models.generateContent({
       model: "gemini-3.8-flash",
       contents: `
-You are an expert career roadmap planner.
+You are an expert career mentor and learning roadmap planner.
 
-Create a practical, ordered career roadmap using the following input:
-${JSON.stringify({
-  careerGoal,
-  skillLevel,
-  hoursPerWeek,
-})}
+Create a practical, ordered learning roadmap for this user:
+${JSON.stringify({ careerGoal, skillLevel, hoursPerWeek })}
 
-Return ONLY valid JSON with exactly this structure:
-{
-  "nodes": [
-    {
-      "id": "unique-id",
-      "title": "Milestone title",
-      "skills": ["skill 1", "skill 2"],
-      "project": "A practical project to build",
-      "estimatedHours": 10,
-      "status": "not_started"
-    }
-  ],
-  "edges": [
-    { "source": "first-id", "target": "second-id" }
-  ],
-  "targetRole": "exact career goal",
-  "estimatedWeeks": 12
-}
+Return JSON with exactly these top-level fields:
+nodes, edges, targetRole, estimatedWeeks.
 
-Rules:
-- Create 5 to 10 ordered, practical milestones.
-- Adapt every milestone to the user's skill level.
-- Every edge must connect two existing milestone IDs.
-- An edge means the source milestone must come before the target.
-- Use unique IDs.
-- Set every new milestone status to "not_started".
-- estimatedHours must be a positive number.
+Each node must contain:
+- id: unique string
+- title: milestone title
+- skills: array of skills
+- project: practical project description
+- estimatedHours: positive number
+- status: "not_started"
+- substeps: array of 3 to 5 smaller actionable tasks
+- resources: array of useful learning resources
+
+Each substep must contain:
+- id: unique string across the roadmap
+- title: short actionable task
+- description: explain what the user should do
+- estimatedMinutes: positive whole number
+- completed: false
+- resources: array of learning resources
+
+Each resource must contain:
+- title: resource name
+- url: full valid HTTPS URL
+- type: one of "article", "video", "course", "practice"
+
+Resource rules:
+- Prefer well-known, reputable learning websites and official documentation.
+- Use URLs you have high confidence are real and relevant.
+- Never invent a specific page URL if unsure; use a well-known official learning homepage instead.
+- Resources should match the milestone or substep.
+- Include 1 to 3 resources for each substep when possible.
+- Milestone-level resources may be an empty array.
+
+Roadmap rules:
+- Create 5 to 8 ordered milestones.
+- Adapt difficulty to the user's skill level.
+- Give every milestone 3 to 5 useful substeps.
+- Every new milestone status must be "not_started".
+- Every new substep completed value must be false.
+- Use unique milestone IDs and unique substep IDs.
+- Every edge must connect existing milestone IDs.
+- Edges represent learning dependencies.
+- Make workload and estimated duration realistic for the user's weekly hours.
+- Return the exact career goal as targetRole.
 - estimatedWeeks must be a positive whole number.
-- Make the total workload realistic for the available hours per week.
-- Include actionable skills and a practical project for each milestone.
-- Set targetRole to the exact career goal supplied by the user.
-- Return JSON only, without Markdown fences or extra commentary.
+- Return JSON only. Do not include Markdown fences or commentary.
       `,
       config: {
         responseMimeType: "application/json",
@@ -141,6 +162,67 @@ Rules:
                       "completed",
                     ],
                   },
+                  substeps: {
+                    type: "ARRAY",
+                    items: {
+                      type: "OBJECT",
+                      properties: {
+                        id: { type: "STRING" },
+                        title: { type: "STRING" },
+                        description: { type: "STRING" },
+                        estimatedMinutes: { type: "INTEGER" },
+                        completed: { type: "BOOLEAN" },
+                        resources: {
+                          type: "ARRAY",
+                          items: {
+                            type: "OBJECT",
+                            properties: {
+                              title: { type: "STRING" },
+                              url: { type: "STRING" },
+                              type: {
+                                type: "STRING",
+                                enum: [
+                                  "article",
+                                  "video",
+                                  "course",
+                                  "practice",
+                                ],
+                              },
+                            },
+                            required: ["title", "url", "type"],
+                          },
+                        },
+                      },
+                      required: [
+                        "id",
+                        "title",
+                        "description",
+                        "estimatedMinutes",
+                        "completed",
+                        "resources",
+                      ],
+                    },
+                  },
+                  resources: {
+                    type: "ARRAY",
+                    items: {
+                      type: "OBJECT",
+                      properties: {
+                        title: { type: "STRING" },
+                        url: { type: "STRING" },
+                        type: {
+                          type: "STRING",
+                          enum: [
+                            "article",
+                            "video",
+                            "course",
+                            "practice",
+                          ],
+                        },
+                      },
+                      required: ["title", "url", "type"],
+                    },
+                  },
                 },
                 required: [
                   "id",
@@ -149,6 +231,8 @@ Rules:
                   "project",
                   "estimatedHours",
                   "status",
+                  "substeps",
+                  "resources",
                 ],
               },
             },
@@ -176,7 +260,6 @@ Rules:
       },
     });
 
-    // 3. Parse and validate Gemini's response.
     const rawText = aiResponse.text;
 
     if (!rawText) {
@@ -203,15 +286,24 @@ Rules:
       );
 
       throw new Error(
-        "Gemini returned a roadmap with an invalid structure. Please try again."
+        "Gemini returned an invalid roadmap structure. Please try again."
       );
     }
 
     const roadmap = roadmapResult.data;
 
-    // 4. Validate milestone connections.
-    const nodeIds = new Set(
-      roadmap.nodes.map((node) => node.id)
+    const nodeIds = new Set(roadmap.nodes.map((node) => node.id));
+    const substepIds = new Set<string>();
+
+    const validSubsteps = roadmap.nodes.every((node) =>
+      node.substeps.every((substep) => {
+        if (substepIds.has(substep.id)) {
+          return false;
+        }
+
+        substepIds.add(substep.id);
+        return true;
+      })
     );
 
     const validEdges = roadmap.edges.every(
@@ -221,17 +313,16 @@ Rules:
         edge.source !== edge.target
     );
 
-    if (!validEdges) {
+    if (!validEdges || !validSubsteps) {
       return Response.json(
         {
           error:
-            "Gemini generated invalid milestone connections. Please try again.",
+            "The generated roadmap contains invalid connections or duplicate substep IDs. Please try again.",
         },
         { status: 502 }
       );
     }
 
-    // 5. Return the same response shape expected by the frontend.
     return Response.json({
       ...roadmap,
       targetRole: careerGoal,

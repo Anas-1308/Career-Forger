@@ -9,6 +9,21 @@ export type MilestoneStatus =
   | "in_progress"
   | "completed";
 
+export type LearningResource = {
+  title: string;
+  url: string;
+  type: "article" | "video" | "course" | "practice";
+};
+
+export type RoadmapSubstep = {
+  id: string;
+  title: string;
+  description: string;
+  estimatedMinutes: number;
+  completed: boolean;
+  resources: LearningResource[];
+};
+
 export type RoadmapNode = {
   id: string;
   title: string;
@@ -16,6 +31,8 @@ export type RoadmapNode = {
   project: string;
   estimatedHours: number;
   status: MilestoneStatus;
+  substeps: RoadmapSubstep[];
+  resources: LearningResource[];
 };
 
 export type RoadmapEdge = {
