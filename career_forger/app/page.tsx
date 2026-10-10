@@ -1,396 +1,250 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
+
 import {
   ReactFlow,
   Background,
   Controls,
   MiniMap,
-  Handle,
-  Position,
   MarkerType,
   type Node,
   type Edge,
-  type NodeProps,
 } from "@xyflow/react";
+
 
 import "@xyflow/react/dist/style.css";
 
-type CareerData = {
-  title: string;
-  description: string;
-  phase: string;
-  hours: number;
-  status: "locked" | "active" | "completed";
-};
+import GoalForm from "@/components/GoalForm";
+import type { Roadmap } from "@/types/roadmap";
 
-type CareerNodeType = Node<CareerData, "career">;
+export default function RoadmapPage() {
+  const [roadmap, setRoadmap] = useState<Roadmap | null>(null);
 
-const initialNodes: CareerNodeType[] = [
-  {
-    id: "html",
-    type: "career",
-    position: { x: 0, y: 0 },
-    data: {
-      title: "HTML & CSS",
-      description: "Build accessible, responsive interfaces.",
-      phase: "01 · Foundations",
-      hours: 20,
-      status: "completed",
-    },
-  },
-  {
-    id: "js",
-    type: "career",
-    position: { x: 0, y: 170 },
-    data: {
-      title: "JavaScript",
-      description: "Learn functions, objects, async code and DOM.",
-      phase: "01 · Foundations",
-      hours: 30,
-      status: "completed",
-    },
-  },
-  {
-    id: "git",
-    type: "career",
-    position: { x: 300, y: 0 },
-    data: {
-      title: "Git & GitHub",
-      description: "Version control and collaborative workflows.",
-      phase: "02 · Developer workflow",
-      hours: 8,
-      status: "active",
-    },
-  },
-  {
-    id: "react",
-    type: "career",
-    position: { x: 300, y: 170 },
-    data: {
-      title: "React & State",
-      description: "Components, hooks, forms and application state.",
-      phase: "02 · Core skills",
-      hours: 35,
-      status: "active",
-    },
-  },
-  {
-    id: "api",
-    type: "career",
-    position: { x: 600, y: 0 },
-    data: {
-      title: "API Integration",
-      description: "Connect interfaces to real backend services.",
-      phase: "03 · Production skills",
-      hours: 15,
-      status: "locked",
-    },
-  },
-  {
-    id: "project",
-    type: "career",
-    position: { x: 600, y: 170 },
-    data: {
-      title: "Portfolio Project",
-      description: "Build and deploy a polished real-world app.",
-      phase: "03 · Portfolio",
-      hours: 25,
-      status: "locked",
-    },
-  },
-  {
-    id: "target",
-    type: "career",
-    position: { x: 900, y: 85 },
-    data: {
-      title: "Frontend Engineer",
-      description: "Prepare your portfolio and interview skills.",
-      phase: "04 · Target role",
-      hours: 20,
-      status: "locked",
-    },
-  },
-];
+  const toggleMilestone = (id: string) => {
+    setRoadmap((current) => {
+      if (!current) return current;
 
-const initialEdges: Edge[] = [
-  { id: "e1", source: "html", target: "js" },
-  { id: "e2", source: "js", target: "react" },
-  { id: "e3", source: "git", target: "api" },
-  { id: "e4", source: "react", target: "project" },
-  { id: "e5", source: "api", target: "target" },
-  { id: "e6", source: "project", target: "target" },
-  { id: "e7", source: "html", target: "git" },
-].map((edge) => ({
-  ...edge,
-  type: "smoothstep",
-  animated: true,
-  style: { stroke: "#6366f1", strokeWidth: 1.5 },
-  markerEnd: { type: MarkerType.ArrowClosed, color: "#6366f1" },
-}));
-
-function CareerNode({ data }: NodeProps<CareerNodeType>) {
-  const colors = {
-    completed: "#34d399",
-    active: "#a78bfa",
-    locked: "#64748b",
+      return {
+        ...current,
+        nodes: current.nodes.map((milestone) =>
+          milestone.id === id
+            ? {
+                ...milestone,
+                status:
+                  milestone.status === "completed"
+                    ? "not_started"
+                    : "completed",
+              }
+            : milestone
+        ),
+      };
+    });
   };
 
-  const color = colors[data.status];
+  const totalMilestones = roadmap?.nodes.length ?? 0;
 
-  return (
-    <div
-      style={{
-        width: 225,
-        padding: 16,
-        borderRadius: 14,
-        background: "#111827",
-        color: "#f8fafc",
-        border: `1px solid ${color}`,
-        boxShadow: `0 0 22px ${color}15`,
-      }}
-    >
-      <Handle type="target" position={Position.Left} />
+  const completedMilestones =
+    roadmap?.nodes.filter(
+      (milestone) => milestone.status === "completed"
+    ).length ?? 0;
 
-      <div
-        style={{
-          fontSize: 10,
-          color,
-          textTransform: "uppercase",
-          letterSpacing: 1,
-          marginBottom: 9,
-        }}
-      >
-        {data.status === "completed"
-          ? "✓ COMPLETED"
-          : data.status === "active"
-            ? "◉ IN PROGRESS"
-            : "◌ UPCOMING"}
-      </div>
+  const progressPercentage =
+    totalMilestones === 0
+      ? 0
+      : Math.round(
+          (completedMilestones / totalMilestones) * 100
+        );
 
-      <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>
-        {data.title}
-      </div>
+  const completedHours =
+    roadmap?.nodes
+      .filter((milestone) => milestone.status === "completed")
+      .reduce(
+        (total, milestone) => total + milestone.estimatedHours,
+        0
+      ) ?? 0;
 
-      <div style={{ fontSize: 12, color: "#9ca3af", lineHeight: 1.6 }}>
-        {data.description}
-      </div>
-
-      <div style={{ fontSize: 11, color: "#a5b4fc", marginTop: 12 }}>
-        {data.phase}
-      </div>
-
-      <Handle type="source" position={Position.Right} />
-    </div>
+  const graphNodes: Node[] = (roadmap?.nodes ?? []).map(
+    (milestone, index) => ({
+      id: milestone.id,
+      position: {
+        x: index * 260,
+        y: 100,
+      },
+      data: {
+        label: milestone.title,
+      },
+      style: {
+        width: 200,
+        padding: 14,
+        borderRadius: 12,
+        border: "1px solid #a5b4fc",
+        background: "#eef2ff",
+        color: "#1e1b4b",
+        fontWeight: 600,
+      },
+    })
   );
-}
 
-const nodeTypes = { career: CareerNode };
-
-export default function Home() {
-  const [nodes, setNodes] = useState(initialNodes);
-  const [selectedId, setSelectedId] = useState<string | null>("react");
-
-  const selectedNode = nodes.find((node) => node.id === selectedId);
-  const completed = nodes.filter(
-    (node) => node.data.status === "completed"
-  ).length;
-
-  const interactiveNodes = useMemo(() => nodes, [nodes]);
-
-  function completeMilestone() {
-    if (!selectedId) return;
-
-    setNodes((current) =>
-      current.map((node) =>
-        node.id === selectedId
-          ? {
-              ...node,
-              data: { ...node.data, status: "completed" },
-            }
-          : node
-      )
-    );
-  }
+  const graphEdges: Edge[] = (roadmap?.edges ?? []).map(
+    (edge, index) => ({
+      id: `${edge.source}-${edge.target}-${index}`,
+      source: edge.source,
+      target: edge.target,
+      markerEnd: {
+        type: MarkerType.ArrowClosed,
+      },
+      animated: false,
+    })
+  );
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#080d19",
-        color: "#f8fafc",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      <header
-        style={{
-          padding: "22px 28px",
-          borderBottom: "1px solid #253047",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 23, fontWeight: 800 }}>
-            <span style={{ color: "#a78bfa" }}>✳</span> PATHFORGE
-          </div>
-          <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 5 }}>
-            YOUR CAREER. REVERSE-ENGINEERED.
-          </div>
-        </div>
-
-        <div style={{ fontSize: 13, color: "#c4b5fd" }}>
-          FRONTEND ENGINEER · DEMO ROADMAP
-        </div>
+    <main className="min-h-screen space-y-8 bg-gray-50 p-6 text-gray-900 md:p-10">
+      <header>
+        <p className="text-sm font-semibold uppercase tracking-widest text-indigo-600">
+          Career_Forger
+        </p>
+        <h1 className="mt-2 text-3xl font-bold">
+          Forge your career path
+        </h1>
+        <p className="mt-2 text-gray-600">
+          Tell us where you want to go. AI will help map
+          the milestones to get you there.
+        </p>
       </header>
 
-      <section style={{ padding: "22px 28px 16px" }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 20,
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <h1 style={{ fontSize: 27, margin: "0 0 8px" }}>
-              Your skill tree
-            </h1>
-            <p style={{ color: "#94a3b8", margin: 0, fontSize: 14 }}>
-              Explore milestones, discover prerequisites, and track your journey.
-            </p>
+      <GoalForm onRoadmapGenerated={setRoadmap} />
+
+      {roadmap && (
+        <section className="space-y-4">
+          
+<div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+  <div className="rounded-xl border bg-white p-5">
+    <p className="text-sm text-gray-500">
+      Overall progress
+    </p>
+    <p className="mt-2 text-3xl font-bold">
+      {progressPercentage}%
+    </p>
+    <div
+      className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200"
+      role="progressbar"
+      aria-valuenow={progressPercentage}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-label="Roadmap completion"
+    >
+      <div
+        className="h-full rounded-full bg-indigo-600 transition-all"
+        style={{ width: `${progressPercentage}%` }}
+      />
+    </div>
+  </div>
+
+  <div className="rounded-xl border bg-white p-5">
+    <p className="text-sm text-gray-500">
+      Milestones completed
+    </p>
+    <p className="mt-2 text-3xl font-bold">
+      {completedMilestones}/{totalMilestones}
+    </p>
+  </div>
+
+  <div className="rounded-xl border bg-white p-5">
+    <p className="text-sm text-gray-500">
+      Estimated hours completed
+    </p>
+    <p className="mt-2 text-3xl font-bold">
+      {completedHours}h
+    </p>
+  </div>
+</div>
+
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-bold">
+                {roadmap.targetRole} roadmap
+              </h2>
+              <p className="text-gray-600">
+                {roadmap.nodes.length} milestones ·
+                {" "}{roadmap.estimatedWeeks} estimated weeks
+              </p>
+            </div>
           </div>
 
-          <div
-            style={{
-              padding: "13px 18px",
-              background: "#151d30",
-              border: "1px solid #293650",
-              borderRadius: 12,
-              minWidth: 145,
-            }}
-          >
-            <div style={{ color: "#94a3b8", fontSize: 12 }}>
-              MILESTONES COMPLETED
-            </div>
-            <div style={{ fontSize: 23, fontWeight: 700, marginTop: 5 }}>
-              {completed} / {nodes.length}
-            </div>
-            <div
-              style={{
-                marginTop: 10,
-                height: 4,
-                background: "#293650",
-                borderRadius: 8,
-              }}
+          <div className="h-[480px] overflow-hidden rounded-2xl border bg-white">
+            <ReactFlow
+              nodes={graphNodes}
+              edges={graphEdges}
+              fitView
+              fitViewOptions={{ padding: 0.2 }}
+              nodesDraggable
+              nodesConnectable={false}
             >
-              <div
-                style={{
-                  height: 4,
-                  width: `${(completed / nodes.length) * 100}%`,
-                  background: "#34d399",
-                  borderRadius: 8,
-                }}
-              />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section style={{ padding: "0 20px 24px" }}>
-        <div
-          style={{
-            height: "66vh",
-            minHeight: 430,
-            border: "1px solid #253047",
-            borderRadius: 16,
-            overflow: "hidden",
-            background: "#0b1120",
-          }}
-        >
-          <ReactFlow
-            nodes={interactiveNodes}
-            edges={initialEdges}
-            nodeTypes={nodeTypes}
-            fitView
-            fitViewOptions={{ padding: 0.2 }}
-            onNodeClick={(_, node) => setSelectedId(node.id)}
-          >
-            <Background color="#263249" gap={22} />
-            <Controls />
-            <MiniMap
-              nodeColor={(node) => {
-                const status = (node.data as CareerData).status;
-                return status === "completed"
-                  ? "#34d399"
-                  : status === "active"
-                    ? "#a78bfa"
-                    : "#64748b";
-              }}
-              style={{ background: "#111827" }}
-            />
-          </ReactFlow>
-        </div>
-      </section>
-
-      {selectedNode && (
-        <section
-          style={{
-            margin: "0 20px 30px",
-            padding: 22,
-            borderRadius: 16,
-            background: "#111827",
-            border: "1px solid #293650",
-          }}
-        >
-          <div style={{ color: "#a78bfa", fontSize: 11, letterSpacing: 1 }}>
-            SELECTED MILESTONE
+              <Background />
+              <Controls />
+              <MiniMap />
+            </ReactFlow>
           </div>
 
-          <h2 style={{ fontSize: 22, marginBottom: 8 }}>
-            {selectedNode.data.title}
-          </h2>
+          <h3 className="text-xl font-bold">
+            Your milestones
+          </h3>
 
-          <p style={{ color: "#9ca3af", lineHeight: 1.7 }}>
-            {selectedNode.data.description}
-          </p>
+          <div className="grid gap-4 md:grid-cols-2">
+            {roadmap.nodes.map((milestone, index) => (
+              <article
+                key={milestone.id}
+                className="rounded-xl border bg-white p-5"
+              >
+                <p className="text-sm font-medium text-indigo-600">
+                  Milestone {index + 1} · {milestone.estimatedHours} hours
+                </p>
 
-          <p style={{ color: "#c4b5fd", fontSize: 13 }}>
-            Estimated effort: {selectedNode.data.hours} hours
-          </p>
+                <h4 className="mt-2 text-lg font-bold">
+                  {milestone.title}
+                </h4>
 
-          <p style={{ color: "#94a3b8", fontSize: 13 }}>
-            Phase: {selectedNode.data.phase}
-          </p>
+                <p className="mt-2 text-sm text-gray-600">
+                  {milestone.project}
+                </p>
 
-          <button
-            onClick={completeMilestone}
-            disabled={selectedNode.data.status === "completed"}
-            style={{
-              padding: "11px 16px",
-              background:
-                selectedNode.data.status === "completed"
-                  ? "#253047"
-                  : "#7c3aed",
-              color: "white",
-              border: 0,
-              borderRadius: 9,
-              cursor:
-                selectedNode.data.status === "completed"
-                  ? "default"
-                  : "pointer",
-              opacity: selectedNode.data.status === "completed" ? 0.65 : 1,
-            }}
-          >
-            {selectedNode.data.status === "completed"
-              ? "Milestone completed ✓"
-              : "Mark as completed"}
-          </button>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {milestone.skills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="rounded-full bg-indigo-50 px-3 py-1 text-sm text-indigo-700"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+
+                
+<div className="mt-4 flex items-center justify-between gap-3">
+  <span className="text-sm text-gray-500">
+    Status: {milestone.status.replace("_", " ")}
+  </span>
+
+  <button
+    type="button"
+    onClick={() => toggleMilestone(milestone.id)}
+    className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+      milestone.status === "completed"
+        ? "border border-gray-300 text-gray-700"
+        : "bg-indigo-600 text-white"
+    }`}
+  >
+    {milestone.status === "completed"
+      ? "Undo completion"
+      : "Mark complete"}
+  </button>
+</div>
+
+              </article>
+            ))}
+          </div>
         </section>
       )}
     </main>
